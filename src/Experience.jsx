@@ -4,9 +4,13 @@ import * as THREE from "three";
 import BoneRigidBodyGrid from "./BoneRigidBodyGrid";
 import GroundPlane from "./GroundPlane";
 import Paper from "./Paper";
+import { useLoader } from "@react-three/fiber";
+
+useGLTF.preload(THREE.GLTFLoader, "./paperModel.glb");
 
 export default function Experience() {
-  const bonePositions = useBonePositions("./paperModel.glb");
+  const { boneChains, bonePositions } = useBones("./paperModel.glb");
+  console.log(boneChains);
 
   return (
     <>
@@ -15,7 +19,10 @@ export default function Experience() {
       <OrbitControls />
 
       <Physics debug={true}>
-        <BoneRigidBodyGrid bonePositionColumns={bonePositions} />
+        <BoneRigidBodyGrid
+          bonePositionColumns={bonePositions}
+          boneChains={boneChains}
+        />
 
         <GroundPlane size={[5, 0.1, 5]} position={[0, -1, 0]} />
       </Physics>
@@ -25,25 +32,34 @@ export default function Experience() {
   );
 }
 
-// Loads the given GLTF file and extracts the world positions of armature bones.
+// Loads the given GLTF file and extracts the bones, as well as their world positions.
 // Assumes bones are arranged in chains - each bone in a chain has just one child.
-function useBonePositions(gltf) {
+function useBones(gltf) {
   const loadedGLTF = useGLTF(gltf);
   const bonePositions = [];
+  const boneChains = [];
 
   for (let rootBone of loadedGLTF.nodes.Armature.children) {
     let workingBone = rootBone;
     const bonePositionsColumn = [];
+    const boneChain = [];
 
     while (workingBone?.children) {
       const worldPosition = new THREE.Vector3();
       workingBone.getWorldPosition(worldPosition);
-
       bonePositionsColumn.push(worldPosition);
+
+      boneChain.push(workingBone);
+
       workingBone = workingBone.children[0];
     }
-    bonePositions.push(bonePositionsColumn);
+
+    // Weird bug without this instanceof check. During first render an array with a SkinnedMesh is added.
+    if (boneChain[0] instanceof THREE.Bone) {
+      boneChains.push(boneChain);
+      bonePositions.push(bonePositionsColumn);
+    }
   }
 
-  return bonePositions;
+  return { boneChains, bonePositions };
 }
